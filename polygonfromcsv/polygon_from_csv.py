@@ -32,6 +32,8 @@ from .resources import *
 from .polygon_from_csv_dialog import PolygonFromCSVDialog
 import os.path
 import datetime
+import csv
+
 
 class PolygonFromCSV:
     """QGIS Plugin Implementation."""
@@ -199,6 +201,7 @@ class PolygonFromCSV:
     def create_memory_lyr(lyr_name):
         """ Create temporary 'memory' layer to store results of calculations.
         :param lyr_name: string, layer name
+        :return mem_lyr: created memory layer
         """
         mem_lyr = QgsVectorLayer('Polygon?crs=epsg:4326', lyr_name, 'memory')
         prov = mem_lyr.dataProvider()
@@ -206,18 +209,68 @@ class PolygonFromCSV:
         prov.addAttributes([QgsField("POL_ID", QVariant.String)])
         mem_lyr.commitChanges()
         QgsProject.instance().addMapLayer(mem_lyr)
+        return mem_lyr
 
     def select_input_file(self):
         """ Selects input CSV file. """
         self.input_file = QFileDialog.getOpenFileName(self.dlg, "Select input file ", "", '*.csv')[0]
         self.dlg.lineEditInputFile.setText(self.input_file)
 
-    def create_polygons(self):
-        """ Creates polygons from CSV input file.
+    @staticmethod
+    def add_polygon_to_layer(polygon_id, feat, prov, vertices):
+        """ Adds polygon to feature.
+        :param polygon_id: str, ident of polygon
+        :param feat: Qgsfeature
+        :param prov: QgsProvider
+        :param vertices: list of QgsPoint which form polygon
         """
+        if polygon_id is not None and len(vertices) < 3:
+            # Need at least 3 vertices to create polygon
+            # TODO: Log error message
+            pass
+        else:
+            # Add polygon to layer
+            if polygon_id is not None:
+                feat.setGeometry(QgsGeometry.fromPolygonXY([vertices]))
+                feat.setAttributes([polygon_id])
+                prov.addFeature(feat)
+
+    def create_polygons(self):
+        """ Creates polygons from CSV input file. """
         self.input_file = self.dlg.lineEditInputFile.text()  # In case file path has been passed
         if self.input_file:
-            self.create_memory_lyr(self.gen_name())
+            lyr = self.create_memory_lyr(self.gen_name())
+            prov = lyr.dataProvider()
+
+            feat = QgsFeature()
+
+            curr_poly_id = None  # Current polygon ident which is created, column POL_ID
+            vertices = []  # List of vertices for current polygon
+
+            with open(self.input_file, 'r') as data_file:
+                reader = csv.DictReader(data_file, delimiter=';')
+                while True:
+                    try:
+                        # Read data from csv row. Note: CSV fields POL_ID,LON,LAT
+                        row = next(reader)
+                        fetched_poly_id = row['POL_ID']  # Polygon ID read from CSV file
+
+                        # Create vertex from data in line, Note: only support for decimal degrees (DD) formats
+                        vertex = QgsPointXY(float(row['LON']), float(row['LAT']))
+
+                        if curr_poly_id == fetched_poly_id:  # Continue current polygon
+                            vertices.append(vertex)
+                        else:
+                            self.add_polygon_to_layer(curr_poly_id, feat, prov, vertices)
+                            # Reset curr_poly_id and vertices after adding polygon
+                            curr_poly_id = fetched_poly_id
+                            vertices.clear()  # Reset vertices list
+                            vertices.append(vertex)  # Add fetched longitude and latitude
+
+                    except StopIteration:  # Reached end of file, try to create polygon from fetched data
+                        self.add_polygon_to_layer(curr_poly_id, feat, prov, vertices)
+                        break
+
         else:
             QMessageBox.critical(QWidget(), "Message", 'Select input data file!')
 
