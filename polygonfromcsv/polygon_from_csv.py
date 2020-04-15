@@ -23,7 +23,7 @@
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction
+from PyQt5.QtWidgets import QAction, QWidget, QMessageBox, QFileDialog
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -43,6 +43,8 @@ class PolygonFromCSV:
             application at run time.
         :type iface: QgsInterface
         """
+        self.input_file = None
+
         # Save reference to the QGIS interface
         self.iface = iface
         # initialize plugin directory
@@ -63,6 +65,10 @@ class PolygonFromCSV:
 
         # Create the dialog (after translation) and keep reference
         self.dlg = PolygonFromCSVDialog()
+
+        self.dlg.pushButtonSelectInputFile.clicked.connect(self.select_input_file)
+        self.dlg.pushButtonCreatePolygons.clicked.connect(self.create_polygons)
+
 
         # Declare instance attributes
         self.actions = []
@@ -180,7 +186,20 @@ class PolygonFromCSV:
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
+    
+    def select_input_file(self):
+        """ Selects input CSV file. """
+        self.input_file = QFileDialog.getOpenFileName(self.dlg, "Select input file ", "", '*.csv')[0]
+        self.dlg.lineEditInputFile.setText(self.input_file)
 
+    def create_polygons(self):
+        """ Creates polygons from CSV input file.
+        """
+        self.input_file = self.dlg.lineEditInputFile.text()  # In case file path has been passed
+        if self.input_file:
+            pass
+        else:
+            QMessageBox.critical(QWidget(), "Message", 'Select input data file!')
 
     def run(self):
         """Run method that performs all the real work"""
