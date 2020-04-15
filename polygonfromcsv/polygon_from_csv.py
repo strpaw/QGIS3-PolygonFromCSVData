@@ -21,16 +21,17 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
+from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, QVariant
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction, QWidget, QMessageBox, QFileDialog
+from qgis.core import *
 
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .polygon_from_csv_dialog import PolygonFromCSVDialog
 import os.path
-
+import datetime
 
 class PolygonFromCSV:
     """QGIS Plugin Implementation."""
@@ -186,7 +187,26 @@ class PolygonFromCSV:
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
-    
+
+    @staticmethod
+    def gen_name():
+        """ Generates name for memory layer base on timestamp in format:
+        YYYYY_MMM_DDD_HHMM.ssssss, e.g.: 2020_Apr_Wed_1622.000001. """
+        timestamp = datetime.datetime.now()
+        return timestamp.strftime('%Y_%b_%a_%H%M.%f')
+
+    @staticmethod
+    def create_memory_lyr(lyr_name):
+        """ Create temporary 'memory' layer to store results of calculations.
+        :param lyr_name: string, layer name
+        """
+        mem_lyr = QgsVectorLayer('Polygon?crs=epsg:4326', lyr_name, 'memory')
+        prov = mem_lyr.dataProvider()
+        mem_lyr.startEditing()
+        prov.addAttributes([QgsField("POL_ID", QVariant.String)])
+        mem_lyr.commitChanges()
+        QgsProject.instance().addMapLayer(mem_lyr)
+
     def select_input_file(self):
         """ Selects input CSV file. """
         self.input_file = QFileDialog.getOpenFileName(self.dlg, "Select input file ", "", '*.csv')[0]
@@ -197,7 +217,7 @@ class PolygonFromCSV:
         """
         self.input_file = self.dlg.lineEditInputFile.text()  # In case file path has been passed
         if self.input_file:
-            pass
+            self.create_memory_lyr(self.gen_name())
         else:
             QMessageBox.critical(QWidget(), "Message", 'Select input data file!')
 
