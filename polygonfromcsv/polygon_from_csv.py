@@ -33,6 +33,8 @@ from .polygon_from_csv_dialog import PolygonFromCSVDialog
 import os.path
 import datetime
 import csv
+from .aviation_gis_toolkit.angle_base import *
+from .aviation_gis_toolkit.const import *
 
 
 class PolygonFromCSV:
@@ -254,9 +256,14 @@ class PolygonFromCSV:
                         # Read data from csv row. Note: CSV fields POL_ID,LON,LAT
                         row = next(reader)
                         fetched_poly_id = row['POL_ID']  # Polygon ID read from CSV file
+                        lon = AngleBase(ang_type=AT_LON)
+                        lat = AngleBase(ang_type=AT_LAT)
+
+                        lon_dd = lon.compacted_format_to_dd(row['LON'])
+                        lat_dd = lat.compacted_format_to_dd(row['LAT'])
 
                         # Create vertex from data in line, Note: only support for decimal degrees (DD) formats
-                        vertex = QgsPointXY(float(row['LON']), float(row['LAT']))
+                        vertex = QgsPointXY(lon_dd, lat_dd)
 
                         if curr_poly_id == fetched_poly_id:  # Continue current polygon
                             vertices.append(vertex)
